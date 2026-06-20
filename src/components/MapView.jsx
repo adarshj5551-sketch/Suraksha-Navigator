@@ -107,6 +107,7 @@ export default function MapView({
   const navLayers   = useRef([]);
   const vehicleMarker = useRef(null);
   const isDark      = useRef(false);
+  const thanaMarker   = useRef(null);
 
   // Navigation Simulator State
   const [navStepIdx, setNavStepIdx]     = useState(0);
@@ -143,9 +144,32 @@ export default function MapView({
   useEffect(() => {
     if (!mapInst.current || !userLocation) return;
     if (userMarker.current) mapInst.current.removeLayer(userMarker.current);
+    if (thanaMarker.current) mapInst.current.removeLayer(thanaMarker.current);
+
+    const thanaName = userLocation.thana?.name || '';
+    const thanaDist = userLocation.thana?.distance || '';
+    const thanaText = thanaName ? `<br>🚔 <b>Nearest Thana:</b> ${thanaName} (${thanaDist})` : '';
+
     userMarker.current = L.marker([userLocation.lat, userLocation.lng], { icon: makeIcon('📍', '#1A6B3C') })
-      .addTo(mapInst.current).bindPopup(`<b>Your Location</b><br>${userLocation.road || ''}`);
-    mapInst.current.setView([userLocation.lat, userLocation.lng], 15);
+      .addTo(mapInst.current)
+      .bindPopup(`<b>Your Location</b><br>${userLocation.road || ''}${thanaText}`);
+
+    if (userLocation.thana && userLocation.thana.lat && userLocation.thana.lng) {
+      thanaMarker.current = L.marker([userLocation.thana.lat, userLocation.thana.lng], {
+        icon: makeIcon('🚔', '#4285F4')
+      }).addTo(mapInst.current)
+        .bindPopup(`<b>🚔 Nearest Police Station</b><br>${userLocation.thana.name}<br>Distance: ${userLocation.thana.distance}`);
+
+      const bounds = L.latLngBounds([
+        [userLocation.lat, userLocation.lng],
+        [userLocation.thana.lat, userLocation.thana.lng]
+      ]);
+      mapInst.current.fitBounds(bounds, { padding: [50, 50] });
+    } else {
+      mapInst.current.setView([userLocation.lat, userLocation.lng], 15);
+    }
+
+    userMarker.current.openPopup();
   }, [userLocation]);
 
   // Draw normal routes (non-nav mode)
@@ -155,6 +179,8 @@ export default function MapView({
     routeLines.current = [];
     if (srcMarker.current) mapInst.current.removeLayer(srcMarker.current);
     if (dstMarker.current) mapInst.current.removeLayer(dstMarker.current);
+    if (userMarker.current) { mapInst.current.removeLayer(userMarker.current); userMarker.current = null; }
+    if (thanaMarker.current) { mapInst.current.removeLayer(thanaMarker.current); thanaMarker.current = null; }
 
     routes.forEach((r, i) => {
       const line = L.polyline(r.coords, {
@@ -300,6 +326,8 @@ export default function MapView({
     routeLines.current.forEach(l => l.setStyle({ opacity: 0, weight: 0 }));
     if (srcMarker.current) srcMarker.current.setOpacity(0);
     if (dstMarker.current) dstMarker.current.setOpacity(0);
+    if (userMarker.current) { mapInst.current.removeLayer(userMarker.current); userMarker.current = null; }
+    if (thanaMarker.current) { mapInst.current.removeLayer(thanaMarker.current); thanaMarker.current = null; }
 
     // ── RENDER ALTERNATIVE ROUTES (GRAYED OUT & CLICKABLE) ──
     if (routes) {
