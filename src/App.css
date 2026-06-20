@@ -606,3 +606,158 @@ body {
 .floating-locate-btn:active {
   transform: translateY(-50%) scale(0.96);
 }
+
+.emergency-map-logo {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: white;
+  border: 2px solid white;
+  padding: 8px 18px;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.8px;
+  box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+  cursor: pointer;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation: emergencyGlow 2s infinite alternate;
+}
+.emergency-map-logo:hover {
+  background: linear-gradient(135deg, #ff5e4d, #d32f2f);
+  transform: translateX(-50%) scale(1.06);
+  box-shadow: 0 6px 20px rgba(231, 76, 60, 0.6);
+}
+.emergency-map-logo:active {
+  transform: translateX(-50%) scale(0.96);
+}
+
+@keyframes emergencyGlow {
+  0% {
+    box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4), 0 0 0 0px rgba(231, 76, 60, 0.3);
+  }
+  100% {
+    box-shadow: 0 4px 18px rgba(231, 76, 60, 0.5), 0 0 0 8px rgba(231, 76, 60, 0);
+  }
+}
+
+.emergency-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.25s ease;
+}
+
+.emergency-modal {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.15);
+}
+
+.emergency-modal-header {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: white;
+  padding: 16px;
+  font-weight: 700;
+  font-size: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.emergency-modal-close {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+.emergency-modal-close:hover {
+  opacity: 1;
+}
+
+.emergency-modal-body {
+  padding: 16px;
+}
+
+.emergency-contact-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  background: #fdf2f2;
+  margin-bottom: 10px;
+  border-left: 4px solid #e74c3c;
+  transition: transform 0.2s;
+}
+.emergency-contact-item:hover {
+  transform: translateX(4px);
+}
+
+.emergency-contact-info {
+  display: flex;
+  flex-direction: column;
+}
+.emergency-contact-name {
+  font-weight: 700;
+  color: #2c3e50;
+  font-size: 14px;
+}
+.emergency-contact-number {
+  color: #7f8c8d;
+  font-size: 12px;
+}
+
+.btn-emergency-call {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 13px;
+  transition: background 0.2s;
+  display: inline-block;
+}
+.btn-emergency-call:hover {
+  background: #c0392b;
+}
+
+.emergency-modal-footer {
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}

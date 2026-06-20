@@ -114,6 +114,7 @@ export default function MapView({
   const [simCoordIdx, setSimCoordIdx]   = useState(0);
   const [voiceMuted, setVoiceMuted]     = useState(false);
   const [simSpeed, setSimSpeed]         = useState(1); // 1x, 2x, 4x
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
   // Init map
   useEffect(() => {
@@ -471,6 +472,54 @@ export default function MapView({
         >
           🎯
         </button>
+      )}
+
+      {/* Floating Emergency Action Logo */}
+      {!navMode && (
+        <button
+          className="emergency-map-logo"
+          onClick={() => setShowEmergencyModal(true)}
+          title="Emergency Help & Contacts"
+        >
+          🚨 <span>EMERGENCY</span>
+        </button>
+      )}
+
+      {/* Emergency Helpline Modal */}
+      {showEmergencyModal && (
+        <div className="emergency-modal-backdrop" onClick={() => setShowEmergencyModal(false)}>
+          <div className="emergency-modal" onClick={e => e.stopPropagation()}>
+            <div className="emergency-modal-header">
+              <span>🚨 Emergency Contacts</span>
+              <button className="emergency-modal-close" onClick={() => setShowEmergencyModal(false)}>✖</button>
+            </div>
+            <div className="emergency-modal-body">
+              {[
+                { name: 'National Emergency Number', num: '112' },
+                { name: 'Police Helpline', num: '112 / 100' },
+                { name: 'Women Helpline', num: '1091' },
+                { name: 'Ambulance Support', num: '102' },
+                { name: 'Fire Control', num: '101' },
+              ].map(item => (
+                <div key={item.name} className="emergency-contact-item">
+                  <div className="emergency-contact-info">
+                    <span className="emergency-contact-name">{item.name}</span>
+                    <span className="emergency-contact-number">Dial: {item.num}</span>
+                  </div>
+                  <a href={`tel:${item.num.split(' ')[0]}`} className="btn-emergency-call">
+                    📞 Call
+                  </a>
+                </div>
+              ))}
+            </div>
+            <div className="emergency-modal-footer">
+              <span style={{ fontSize: 11, color: '#7f8c8d' }}>Aap Ki Suraksha Hamara Sankalp</span>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setShowEmergencyModal(false); if (onQuickLocate) onQuickLocate(); }}>
+                📍 Get Location
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Normal mode legend */}
