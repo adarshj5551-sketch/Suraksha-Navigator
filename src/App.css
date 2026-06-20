@@ -761,3 +761,6 @@ body {
   from { transform: translateY(30px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+.est-tag { font-size: 8px; color: #94A3B8; font-weight: 400; }
+

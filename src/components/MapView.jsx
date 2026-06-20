@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { haversine } from '../utils/haversine.js';
+import { getAllModeEstimates, formatDuration, calculateETA } from '../utils/travelModes.js';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -117,6 +118,32 @@ export default function MapView({
   const [simSpeed, setSimSpeed]         = useState(1); // 1x, 2x, 4x
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
+  const [modeEstimates, setModeEstimates] = useState(null);
+  const [activeMode, setActiveMode] = useState('car');
+
+  useEffect(() => {
+    if (!srcCoords || !dstCoords || !navRoute) return;
+    async function loadEstimates() {
+      const carRouteData = {
+        coords: navRoute.coords,
+        distanceKm: parseFloat(navRoute.dist),
+        durationMin: parseInt(navRoute.time),
+      };
+      const estimates = await getAllModeEstimates(
+        srcCoords.lat, srcCoords.lng, dstCoords.lat, dstCoords.lng, carRouteData
+      );
+      setModeEstimates(estimates);
+      setActiveMode('car');
+    }
+    loadEstimates();
+  }, [srcCoords, dstCoords, navRoute]);
+
+  useEffect(() => {
+    setSimCoordIdx(0);
+    setNavStepIdx(0);
+    setSimulating(false);
+  }, [activeMode]);
+
   // Init map
   useEffect(() => {
     if (mapInst.current) return;
@@ -220,14 +247,17 @@ export default function MapView({
     mapInst.current.setView([lat, lng], 14, { animate: true });
   }, [highlightedStep]);
 
+  const selected = modeEstimates?.find(m => m.mode === activeMode);
+
   // Map step index lookup
   const stepIndices = useMemo(() => {
     if (!navRoute || !navRoute.directions) return [];
+    const coords = (selected && !selected.isEstimate) ? selected.coords : navRoute.coords;
     return navRoute.directions.map((step) => {
-      const idx = navRoute.coords.findIndex(c => c[0] === step.coord[0] && c[1] === step.coord[1]);
+      const idx = coords.findIndex(c => c[0] === step.coord[0] && c[1] === step.coord[1]);
       return idx !== -1 ? idx : 0;
     });
-  }, [navRoute]);
+  }, [navRoute, selected]);
 
   // Text to Speech logic
   const speakInstruction = (text) => {
@@ -255,9 +285,10 @@ export default function MapView({
 
   // Travel angle calculation
   const getTravelAngle = (idx) => {
-    if (!navRoute || !navRoute.coords || navRoute.coords.length < 2) return 0;
-    const p1 = navRoute.coords[idx] || navRoute.coords[0];
-    const p2 = navRoute.coords[idx + 1] || navRoute.coords[idx] || navRoute.coords[0];
+    const coords = (selected && !selected.isEstimate) ? selected.coords : (navRoute ? navRoute.coords : []);
+    if (coords.length < 2) return 0;
+    const p1 = coords[idx] || coords[0];
+    const p2 = coords[idx + 1] || coords[idx] || coords[0];
     if (!p1 || !p2) return 0;
     const dy = p2[0] - p1[0];
     const dx = p2[1] - p1[1];
@@ -279,10 +310,11 @@ export default function MapView({
   // Simulation play interval
   useEffect(() => {
     if (!simulating || !navMode || !navRoute) return;
+    const coords = (selected && !selected.isEstimate) ? selected.coords : navRoute.coords;
     const intervalTime = Math.max(300, 1500 / simSpeed);
     const interval = setInterval(() => {
       setSimCoordIdx(prev => {
-        if (prev >= navRoute.coords.length - 1) {
+        if (prev >= coords.length - 1) {
           setSimulating(false);
           speakInstruction("You have arrived at your destination.");
           return prev;
@@ -291,7 +323,7 @@ export default function MapView({
       });
     }, intervalTime);
     return () => clearInterval(interval);
-  }, [simulating, navMode, navRoute, simSpeed]);
+  }, [simulating, navMode, navRoute, simSpeed, selected]);
 
   // Update step indices dynamically based on simulation coordinate position
   useEffect(() => {
@@ -351,7 +383,7 @@ export default function MapView({
       });
     }
 
-    const coords = navRoute.coords;
+    const coords = (selected && !selected.isEstimate) ? selected.coords : navRoute.coords;
 
     // Glow line (wider, semi-transparent)
     const glow = L.polyline(coords, {
@@ -384,13 +416,14 @@ export default function MapView({
 
     // Fit bounds initially
     mapInst.current.fitBounds(L.latLngBounds(coords), { padding: [80, 80] });
-  }, [navMode, navRoute, navSrc, navDst, routes, onSwitchNavRoute]);
+  }, [navMode, navRoute, navSrc, navDst, routes, onSwitchNavRoute, selected]);
 
   // Update vehicle position marker dynamically
   useEffect(() => {
     if (!mapInst.current || !navMode || !navRoute) return;
 
-    const currentCoord = navRoute.coords[simCoordIdx] || navRoute.coords[0];
+    const coords = (selected && !selected.isEstimate) ? selected.coords : navRoute.coords;
+    const currentCoord = coords[simCoordIdx] || coords[0];
     const angle = getTravelAngle(simCoordIdx);
 
     if (vehicleMarker.current) {
@@ -404,7 +437,7 @@ export default function MapView({
     }
 
     mapInst.current.setView(currentCoord, 16, { animate: true });
-  }, [simCoordIdx, navMode, navRoute]);
+  }, [simCoordIdx, navMode, navRoute, selected]);
 
   // Clean up speech on unmount or navigate exit
   useEffect(() => {
@@ -417,18 +450,17 @@ export default function MapView({
   const currentAngle = getTravelAngle(simCoordIdx);
 
   // Compute transport times and remaining stats for bottom bar
-  const pct = navRoute ? simCoordIdx / (navRoute.coords.length - 1) : 0;
-  const remainingDist = navRoute ? (parseFloat(navRoute.dist) * (1 - pct)).toFixed(1) : '0';
-  const remainingTimeMinutes = navRoute ? Math.ceil(parseInt(navRoute.time) * (1 - pct)) : 0;
-  const remainingTimeStr = remainingTimeMinutes > 60 
-    ? `${Math.floor(remainingTimeMinutes / 60)} hr ${remainingTimeMinutes % 60} min` 
-    : `${remainingTimeMinutes} min`;
+  const coordsForPct = (selected && !selected.isEstimate) ? selected.coords : (navRoute ? navRoute.coords : []);
+  const pct = coordsForPct.length > 1 ? simCoordIdx / (coordsForPct.length - 1) : 0;
+
+  const activeDistance = selected ? selected.distanceKm : (navRoute ? parseFloat(navRoute.dist) : 0);
+  const remainingDist = (activeDistance * (1 - pct)).toFixed(1);
+
+  const activeDuration = selected ? selected.durationMin : (navRoute ? parseInt(navRoute.time) : 0);
+  const remainingTimeMinutes = Math.ceil(activeDuration * (1 - pct));
+  const remainingTimeStr = formatDuration(remainingTimeMinutes);
 
   const carTime = remainingTimeStr;
-  const distNum = parseFloat(remainingDist);
-  const bikeTime = distNum ? `${Math.ceil(distNum / 18 * 60)} min` : '';
-  const busTime  = distNum ? `${Math.floor(distNum / 20 * 60 / 60) > 0 ? Math.floor(distNum / 20 * 60 / 60) + ' hr ' : ''}${Math.ceil(distNum / 20 * 60 % 60)} min` : '';
-  const walkTime = distNum ? `${Math.floor(distNum / 5 * 60 / 60) > 0 ? Math.floor(distNum / 5 * 60 / 60) + ' hr ' : ''}${Math.ceil(distNum / 5 * 60 % 60)} min` : '';
 
   // Get ETA
   const etaTimeStr = useMemo(() => {
@@ -448,16 +480,17 @@ export default function MapView({
     const nextIdx = stepIndices[navStepIdx + 1];
     if (nextIdx === undefined || nextIdx <= simCoordIdx) return 0;
 
+    const coords = (selected && !selected.isEstimate) ? selected.coords : navRoute.coords;
     let distSum = 0;
     for (let i = simCoordIdx; i < nextIdx; i++) {
-      const p1 = navRoute.coords[i];
-      const p2 = navRoute.coords[i + 1];
+      const p1 = coords[i];
+      const p2 = coords[i + 1];
       if (p1 && p2) {
         distSum += haversine(p1[0], p1[1], p2[0], p2[1]);
       }
     }
     return distSum;
-  }, [navRoute, simCoordIdx, navStepIdx, stepIndices]);
+  }, [navRoute, simCoordIdx, navStepIdx, stepIndices, selected]);
 
   const formattedDistanceToNextTurn = useMemo(() => {
     if (distanceToNextTurn < 0.1) {
@@ -655,22 +688,43 @@ export default function MapView({
 
             {/* Sub-modes bar */}
             <div className="nav-hud-modes-row">
-              <div className="nav-hud-mode active">
-                <span className="mode-ico">🚗</span>
-                <span className="mode-t">{carTime}</span>
-              </div>
-              <div className="nav-hud-mode">
-                <span className="mode-ico">🏍️</span>
-                <span className="mode-t">{bikeTime}</span>
-              </div>
-              <div className="nav-hud-mode">
-                <span className="mode-ico">🚌</span>
-                <span className="mode-t">{busTime}</span>
-              </div>
-              <div className="nav-hud-mode">
-                <span className="mode-ico">🚶</span>
-                <span className="mode-t">{walkTime}</span>
-              </div>
+              {modeEstimates ? (
+                modeEstimates.map((m) => {
+                  const currentDurationMin = Math.ceil(m.durationMin * (1 - pct));
+                  return (
+                    <div
+                      key={m.mode}
+                      className={`nav-hud-mode ${activeMode === m.mode ? 'active' : ''}`}
+                      onClick={() => setActiveMode(m.mode)}
+                    >
+                      <span className="mode-ico">{m.icon}</span>
+                      <span className="mode-t">
+                        {formatDuration(currentDurationMin)}
+                        {m.isEstimate && <small className="est-tag"> · Est.</small>}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <>
+                  <div className="nav-hud-mode active">
+                    <span className="mode-ico">🚗</span>
+                    <span className="mode-t">{carTime}</span>
+                  </div>
+                  <div className="nav-hud-mode">
+                    <span className="mode-ico">🏍️</span>
+                    <span className="mode-t">Loading...</span>
+                  </div>
+                  <div className="nav-hud-mode">
+                    <span className="mode-ico">🚌</span>
+                    <span className="mode-t">Loading...</span>
+                  </div>
+                  <div className="nav-hud-mode">
+                    <span className="mode-ico">🚶</span>
+                    <span className="mode-t">Loading...</span>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Exit/Control Row */}
